@@ -8,6 +8,7 @@ import javafx.embed.swing.JFXPanel;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowEvent;
 
 /*  2019.7.16, 先々週あたりより構想をねっているpluginについてメモ
  *  目的 : ハエのembryoのgermband extension時期の表面の細胞を擬似的に引き伸ばした開き画像を作る
@@ -80,6 +81,11 @@ import java.awt.*;
  *      Githubにアップロードに備えて、コードの掃除をおこなった。
  *      ImageJ-1.53b33ではLoadした直後にCheckMeshを行うとエラーが出る(1.52sでは出ない)
  *
+ * 20200531
+ *      ボタンなどの誤字脱字の修正
+ *
+ * 20200610
+ *      シングルチャンネル時に動作するように改善
  */
 
 /**
@@ -95,7 +101,7 @@ import java.awt.*;
  */
 
 public class SheetMeshProjection_ extends PlugInFrame {
-    static String version = "1.0-20200528";
+    static String version = "1.0-20200531";
 
     ImagePlus mainImage;
     ImageCanvas ic;
@@ -165,8 +171,22 @@ public class SheetMeshProjection_ extends PlugInFrame {
         Point ijLocation = IJ.getInstance().getLocation(); //imagejのtoolboxの開始座標
         int ij_height = IJ.getInstance().getHeight();
         this.setLocation(ijLocation.x, ijLocation.y + ij_height);
-
+        this.setListener();
     }
 
 
+    public void setListener(){
+        mainImage.getWindow().addWindowListener(this);
+    }
+
+    public void removeListener(){
+        mainImage.getWindow().removeWindowListener(this);
+    }
+
+    @Override
+    public void windowClosing(WindowEvent e) {
+        ui.close();
+        this.removeListener();
+        this.close();
+    }
 }

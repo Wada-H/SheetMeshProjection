@@ -6,6 +6,7 @@ import ij.plugin.Duplicator;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 import ij.process.LUT;
+import javafx.application.Platform;
 import javafx.embed.swing.JFXPanel;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -15,6 +16,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.Pane;
+import javafx.scene.shape.Mesh;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import java.awt.*;
@@ -47,7 +49,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     Color currentStrokColor = Color.YELLOW;
 
     int chSize;
-
+    LUT old_lut; //for single?
 
     //ROI保存用//
 
@@ -111,7 +113,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
         mainImage = ip;
         forCrossSectionImage = mainImage.duplicate();
-        chSize = mainImage.getNSlices();
+        chSize = mainImage.getNChannels();
         ic = mainImage.getCanvas();
 
         if(mainImage.getOriginalFileInfo() != null){
@@ -165,14 +167,36 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     public void setListener(){
         ic.addMouseListener(this);
         ic.addMouseMotionListener(this);
-        ic.addKeyListener(this);
         ic.addMouseWheelListener(this);
+
+        ic.addKeyListener(this);
+
         ImagePlus.addImageListener(this);
 
         icXZ.addMouseListener(this);
         icYZ.addMouseListener(this);
 
+        mainImage.getWindow().addWindowListener(this);
+
     }
+
+    public void removeListener() {
+        ic.removeMouseListener(this);
+        ic.removeMouseMotionListener(this);
+        ic.removeMouseWheelListener(this);
+
+        ic.removeKeyListener(this);
+
+        ImagePlus.removeImageListener(this);
+
+        icXZ.removeMouseListener(this);
+        icYZ.removeMouseListener(this);
+
+        mainImage.getWindow().removeWindowListener(this);
+
+
+    }
+
 
     public void createMesh(int xSize, int ySize, int xyInterval){ //interval間隔の正方形メッシュを作る
         Double[] b = new Double[3];
@@ -472,6 +496,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
 
         ImagePlus[] result = new ImagePlus[2];
+
         result[0] = buffImageXZ;
         result[1] = buffImageYZ;
 
@@ -505,39 +530,64 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
     private void setCrossSectionImage(){
 
-        ImagePlus[] xzyzImages = this.createCrossSectionImage();
-        ImagePlus buffImageXZ = xzyzImages[0];
-        ImagePlus buffImageYZ = xzyzImages[1];
+        final String[] titles = {"X-Z", "Y-Z"};
 
-        if(buffImageYZ != null) {
+        final ImagePlus[] xzyzImages = this.createCrossSectionImage();
 
-            if (chSize > 1) {
-                if ((xzImage != null) && (xzImage.isVisible())) {
+        IntStream zParallelProcess = IntStream.range(0, xzyzImages.length);
+        if(xzyzImages[0] != null) {
+
+            zParallelProcess.parallel().forEach(i -> {
+                ImagePlus[] zImages;
+
+                if (chSize > 1) {
+                     zImages = new ImagePlus[]{xzImage, yzImage};
+
+                } else {
+                    zImages = new ImagePlus[]{xzImageSingle, yzImageSingle};
+
+                }
+
+                if ((zImages[i] != null) && (zImages[i].isVisible())) {
                     //crossSectionImage.setImage(buffImage); //->CompositeImageで配列の長さ違いエラーが出る場合がある
 
-                    System.out.println("xzImage size : " + xzImage.getStackSize());
-                    System.out.println("buImage size : " + buffImageXZ.getStackSize());
-
                     // xz, yz のサイズが変わるのは許容しないといけない //
-                    xzImage.setImage(buffImageXZ);
-                    yzImage.setImage(buffImageYZ);
 
-                }
-            } else {
-                if ((xzImageSingle != null) && (xzImageSingle.isVisible())) {
-                    xzImageSingle.setStack(buffImageXZ.getStack(), chSize,1,1);
-                    yzImageSingle.setStack(buffImageYZ.getStack(), chSize,1,1);
+                    zImages[i].setStack(xzyzImages[i].getStack(), chSize, 1, 1);
 
+                } else {
+                    if(chSize > 1) {
+                        CompositeImage ci_img = (CompositeImage) mainImage;
+                        zImages[i] = new CompositeImage(xzyzImages[i], ci_img.getMode());
+                        zImages[i].setTitle(titles[i]);
+                    }else{
+                        zImages[i] = new ImagePlus(titles[i], xzyzImages[i].getProcessor());
+                    }
                 }
-            }
-            //syncZYZ(); //保留
+                this.syncZYZ(mainImage, xzyzImages[i]);
+            });
+
+
+
         }
-        xzImage.updateAndDraw();
 
-        yzImage.updateAndDraw();
+        //this.updateAndDraw();
     }
 
 
+    public void updateAndDraw(){
+        if(xzImage != null){
+            xzImage.updateAndDraw();
+        }else{
+            xzImageSingle.updateAndDraw();
+        }
+
+        if(yzImage != null){
+            yzImage.updateAndDraw();
+        }else{
+            yzImageSingle.updateAndDraw();
+        }
+    }
 
     class CrossSectionThread extends Thread{
         public void run(){
@@ -545,6 +595,121 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         }
     }
 
+
+    /*
+    private void syncLut(ImagePlus donor, ImagePlus acceptor){
+
+        LUT[] a_lut = ((CompositeImage)donor).getLuts();
+        LUT[] b_lut = ((CompositeImage)acceptor).getLuts();
+
+        boolean check = true;
+
+
+        out:for(int i = 0; i < a_lut.length; i++){
+            if(a_lut[i] != b_lut[i]){
+                check = false;
+                break out;
+            }
+        }
+
+        if(((CompositeImage)donor).getMode() == IJ.GRAYSCALE){
+            check = true;
+        }
+
+        if(check == false){
+            ((CompositeImage)acceptor).setLuts(a_lut);
+        }
+
+    }
+    */
+
+    /*
+    private void syncLut(ImagePlus donor, ImagePlus acceptor){
+        LUT[] donorLut = donor.getLuts();
+        LUT[] acceptorLut = acceptor.getLuts();
+        boolean check = true;
+
+
+        out:for(int i = 0; i < donorLut.length; i++){
+            if(donorLut[i] != acceptorLut[i]){
+                check = false;
+                break out;
+            }
+        }
+
+        if(check == false){
+
+            for(int i = 0; i < donorLut.length; i++){
+                //acceptor.getLuts()[i] = donorLut[i];
+                acceptorLut[i] = donorLut[i];
+            }
+
+        }
+
+        if(donor.isComposite()){
+            int cc = donor.getC();
+            ((CompositeImage)acceptor).setMode(((CompositeImage)donor).getMode());
+            boolean[] donorActive = ((CompositeImage)donor).getActiveChannels();
+            boolean[] acceptorActive = ((CompositeImage)acceptor).getActiveChannels();
+
+            for(int i = 0; i < acceptorActive.length; i++){
+                acceptorActive[i] = donorActive[i];
+            }
+
+            acceptor.setC(cc);
+        }
+    }
+
+     */
+
+
+    private void syncZYZ(ImagePlus donor, ImagePlus acceptor){
+        int cc =  donor.getC();
+
+        /// Mode 同期 ///
+        if(donor.isComposite()){
+            CompositeImage ci_imp = (CompositeImage)donor;
+            CompositeImage crossSectionImage = (CompositeImage)acceptor;
+
+
+            //Channelsで切り替えたときのみの動作。
+            if(ci_imp.getMode() != crossSectionImage.getMode()) {
+                crossSectionImage.setMode(ci_imp.getMode());
+
+            }else{ // なにかうごいたときいつでも
+
+
+            }
+
+            ///ChannelsでComposite時にChannelを変えた場合の動作
+
+            boolean[] active = ci_imp.getActiveChannels();
+            boolean[] active_xz = crossSectionImage.getActiveChannels();
+
+            for(int i = 0; i < active_xz.length; i++){
+                active_xz[i] = active[i];
+            }
+
+            ///////////////
+
+            // lut set //
+            syncLut(ci_imp,crossSectionImage);
+
+            crossSectionImage.setC(cc);
+
+        }else{
+            LUT imp_l = mainImage.getProcessor().getLut();
+            LUT xz_l = donor.getProcessor().getLut();
+
+            //if(xz_l != old_lut){
+             //   donor.getProcessor().setLut(imp_l);
+                //
+                // crossSectionImage_single.updateAndDraw();
+            //}
+
+        }
+
+    }
 
     private void syncLut(CompositeImage a, CompositeImage b){
         LUT[] a_lut = a.getLuts();
@@ -560,15 +725,19 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
             }
         }
 
-        if(a.getMode() == IJ.GRAYSCALE){
-            check = true;
-        }
+        if(a.isComposite()) {
 
-        if(check == false){
-            b.setLuts(a_lut);
-        }
+            if (a.getMode() == IJ.GRAYSCALE) {
+                check = true;
+            }
 
+            if (check == false) {
+                b.setLuts(a_lut);
+            }
+        }
     }
+
+
 
     private void changeCrossSectionImage(){
         if(mainImage.getRoi() != null) {
@@ -697,6 +866,30 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     @Override
     public void imageUpdated(ImagePlus imp) {
 
+        final int mainImageID = mainImage.getID();
+        final int impID = imp.getID();
+        /*
+        if(mainImage.isComposite()){
+            boolean mainImageActive[] = ((CompositeImage)mainImage).getActiveChannels();
+            boolean xzActive[] = ((CompositeImage)xzImage).getActiveChannels();
+            boolean yzActive[] = ((CompositeImage)yzImage).getActiveChannels();
+            for(int i = 0; i < mainImageActive.length; i++){
+                xzActive[i] = mainImageActive[i];
+                yzActive[i] = mainImageActive[i];
+            }
+        }
+        */
+        if(impID == mainImageID) {
+            ImagePlus[] zImages;
+            if(mainImage.isComposite()){
+                zImages = new ImagePlus[]{xzImage, yzImage};
+            }else{
+                zImages = new ImagePlus[]{xzImageSingle, yzImageSingle};
+            }
+            this.syncZYZ(mainImage, zImages[0]);
+            this.syncZYZ(mainImage, zImages[1]);
+            this.updateAndDraw();
+        }
     }
 
     @Override
@@ -788,7 +981,6 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
             Roi selectedRoi = mainImage.getRoi();
             if(selectedRoi != null) {
                 int selectedRoiIndex = currentOverlay.getIndex(selectedRoi);
-                System.out.println("selectedRoiIndex " + selectedRoiIndex);
 
                 MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
 
@@ -802,7 +994,13 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
                     } else if (viewMode == 1) { //これらについてもマウスリリースの都度登録し直すのが安全か？選択しているROIだけか、すべてか？
 
-                        MeshAgent meshAgentYZ = new MeshAgent(yzImage, meshTlist.get(mainImage.getT()));
+
+                        MeshAgent meshAgentYZ;
+                        if(yzImage != null) {
+                            meshAgentYZ = new MeshAgent(yzImage, meshTlist.get(mainImage.getT()));
+                        }else{
+                            meshAgentYZ = new MeshAgent(yzImageSingle, meshTlist.get(mainImage.getT()));
+                        }
 
                         PolygonRoi pRoi = (PolygonRoi) selectedRoi;
                         pRoi.removeSplineFit();
@@ -818,8 +1016,12 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
                         meshAgentYZ.displayROI(selectedRoiIndex, "col");
 
                     } else if (viewMode == 2) {
-                        MeshAgent meshAgentXZ = new MeshAgent(xzImage, meshTlist.get(mainImage.getT()));
-
+                        MeshAgent meshAgentXZ;
+                        if(xzImage != null) {
+                            meshAgentXZ = new MeshAgent(xzImage, meshTlist.get(mainImage.getT()));
+                        }else{
+                            meshAgentXZ = new MeshAgent(xzImageSingle, meshTlist.get(mainImage.getT()));
+                        }
 
                         PolygonRoi pRoi = (PolygonRoi) selectedRoi;
                         pRoi.removeSplineFit();
@@ -937,7 +1139,8 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
     @Override
     public void windowClosing(WindowEvent e) {
-
+        this.removeListener();
+        this.close();
     }
 
     @Override
@@ -1218,4 +1421,23 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         alert.showAndWait();
     }
 
+
+
+    public void close(){
+        mainImage.setOverlay(null);
+        this.removeListener();
+        if (xzImage != null){
+            xzImage.close();
+        }else{
+            xzImageSingle.close();
+        }
+
+        if(yzImage != null) {
+            yzImage.close();
+        }else{
+            yzImageSingle.close();
+        }
+
+        Platform.setImplicitExit(false);
+    }
 }
