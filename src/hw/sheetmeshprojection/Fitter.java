@@ -45,7 +45,7 @@ public class Fitter {
         }
         thickness = az;
         tValue = mainImage.getDisplayRangeMax() * (threshold / 100);
-        System.out.println("thickness, tValue = " + thickness + ", " + tValue);
+        //System.out.println("thickness, tValue = " + thickness + ", " + tValue);
 
     }
 

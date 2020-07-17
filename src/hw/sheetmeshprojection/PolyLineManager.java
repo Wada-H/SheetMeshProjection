@@ -162,7 +162,7 @@ public class PolyLineManager {
             Point2D crossPoint = this.calc4(x1, y1, x2, y2, x3, y3, x4, y4); //before 1.52t
             //Point2D crossPoint = this.calc4(x4, y4, x1, y1, x2, y2, x3, y3); //1.52u40 later *この対応では厳しいかも -> 1.53b33でLine.getFloatPolygonに修正（1.52tと同じなに変更)
 
-            System.out.println("shifted xz : " + crossPoint.getX() + ", " + crossPoint.getY());
+            //System.out.println("shifted xz : " + crossPoint.getX() + ", " + crossPoint.getY());
             if(Double.isNaN(crossPoint.getX())){
                 shiftedXpoints[i] = shiftedXpoints[i-1];
                 shiftedYpoints[i] = shiftedYpoints[i-1];
@@ -212,12 +212,12 @@ public class PolyLineManager {
 
         Point2D points = this.calc4(x1, y1, x2, y2, x3, y3, x4, y4);
 
-        System.out.println("1 : " + x1 + ", " + y1);
-        System.out.println("2 : " + x2 + ", " + y2);
-        System.out.println("3 : " + x3 + ", " + y3);
-        System.out.println("4 : " + x4 + ", " + y4);
+        //System.out.println("1 : " + x1 + ", " + y1);
+        //System.out.println("2 : " + x2 + ", " + y2);
+        //System.out.println("3 : " + x3 + ", " + y3);
+        //System.out.println("4 : " + x4 + ", " + y4);
 
-        System.out.println("check position : " + points.getX() + ", " + points.getY());
+        //System.out.println("check position : " + points.getX() + ", " + points.getY());
     }
 
     //できた。これ最強の予感 //もしかすると角度の問題で対応する点の位置を変える必要があるかも

@@ -67,7 +67,7 @@ public class MeshAgent {
         for(int i = 0; i < buffYZ.npoints; i++){
             xpoints[i] = buffYZ.ypoints[i];
             ypoints[i] = lengthList.get(i).floatValue();
-            System.out.println("MeshAgent Col: " + xpoints[i] + ", " + ypoints[i]);
+            //System.out.println("MeshAgent Col: " + xpoints[i] + ", " + ypoints[i]);
         }
 
         PolygonRoi result = new PolygonRoi(xpoints, ypoints, PolygonRoi.POLYLINE);

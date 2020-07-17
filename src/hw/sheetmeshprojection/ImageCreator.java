@@ -333,7 +333,7 @@ public class ImageCreator {
         for(int i = 0; i < hashMap.size(); i++){
             for(int c = 0; c < mainImage.getNChannels(); c++) {
                 double[] ddat = hashMap.get(i).get(c).stream().mapToDouble(d -> d).toArray();
-                System.out.println("ddat size"  + ddat.length);
+                //System.out.println("ddat size"  + ddat.length);
                 ImageProcessor ip = new FloatProcessor(width, height, ddat);
                 imageStack.addSlice(ip);
             }

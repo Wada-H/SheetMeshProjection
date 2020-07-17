@@ -86,6 +86,22 @@ import java.awt.event.WindowEvent;
  *
  * 20200610
  *      シングルチャンネル時に動作するように改善
+ *
+ * 20200629
+ *      Composite:ColorにおいてmainImageとXZ,YZ Imageの同期に対応
+ *      -> XZ, YZ画像が消えた時に不具合が起こるので対応必須。ただし、一応nullの場合は新しく画像を作るような記述をした記憶がある
+ *
+ *
+ * 20200717
+ *      Fijiのupdate siteに登録。https://sites.imagej.net//SheetMeshProjection/
+ *      Fijiに登録済みのInteractive_3D_Surface_Plot-ver3.0.0は同じものだが、runの文章に変更があるためFiji用に変更
+ *      Roiをメッシュ表示している際にドラッグするとその情報でメッシュの位置を書き換えてしまう不具合
+ *          -> Roiの種類を判定することで対応
+ *
+ *
+ * 20200717
+ *      根本的なZのみの歪み補正の機能がある方が良さそう。
+ *
  */
 
 /**
@@ -101,13 +117,12 @@ import java.awt.event.WindowEvent;
  */
 
 public class SheetMeshProjection_ extends PlugInFrame {
-    static String version = "1.0-20200531";
+    static String version = "1.0-20200717";
 
     ImagePlus mainImage;
     ImageCanvas ic;
 
     SheetMeshProjectionUI ui;
-
 
     public SheetMeshProjection_() {
         super("SheetMeshProjection_" + version);

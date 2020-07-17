@@ -136,7 +136,6 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         //
 
 
-
     }
 
 
@@ -273,7 +272,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
         MeshManager meshManager = new MeshManager(mesh);
 
-        System.out.println("showMeshAllShape mesh size : " + mesh.getXsize() + ", " + mesh.getYsize());
+        //System.out.println("showMeshAllShape mesh size : " + mesh.getXsize() + ", " + mesh.getYsize());
         for(int x = 0; x < mesh.getXsize(); x++){
             PolygonRoi rowPolygon = new PolygonRoi(meshManager.getColumnByFloatPolygon(x), PolygonRoi.POLYLINE);
             rowPolygon.fitSpline();
@@ -313,8 +312,8 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         mainImage.setOverlay(currentOverlay);
 
         MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
-        ArrayList<Integer> dRow = meshManager.getMaxDistanceRowMax();
-        dRow.forEach(value ->{ System.out.println("dRow " + value);});
+        //ArrayList<Integer> dRow = meshManager.getMaxDistanceRowMax();
+        //dRow.forEach(value ->{ System.out.println("dRow " + value);});
     }
 
     public void showMeshByLineY(MeshMap<Double[]> mesh){
@@ -332,9 +331,9 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         mainImage.setOverlay(null);
         mainImage.setOverlay(currentOverlay);
 
-        MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
-        ArrayList<Integer> dCol = meshManager.getMaxDistanceColMax();
-        dCol.forEach(value ->{ System.out.println("dCol " + value);});
+        //MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
+        //ArrayList<Integer> dCol = meshManager.getMaxDistanceColMax();
+        //dCol.forEach(value ->{ System.out.println("dCol " + value);});
     }
 
     public void showMeshByPoints(MeshMap<Double[]> mesh){
@@ -497,6 +496,9 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
         ImagePlus[] result = new ImagePlus[2];
 
+        this.syncZYZ(mainImage, buffImageXZ);
+        this.syncZYZ(mainImage, buffImageYZ);
+
         result[0] = buffImageXZ;
         result[1] = buffImageYZ;
 
@@ -564,7 +566,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
                         zImages[i] = new ImagePlus(titles[i], xzyzImages[i].getProcessor());
                     }
                 }
-                this.syncZYZ(mainImage, xzyzImages[i]);
+                //this.syncZYZ(mainImage, xzyzImages[i]); //20200629 ここでなくて良さそう,要チェック
             });
 
 
@@ -676,6 +678,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
             if(ci_imp.getMode() != crossSectionImage.getMode()) {
                 crossSectionImage.setMode(ci_imp.getMode());
 
+                //System.out.println("CopmpositMode : " + ci_imp.getModeAsString());
             }else{ // なにかうごいたときいつでも
 
 
@@ -698,9 +701,12 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
             crossSectionImage.setC(cc);
 
         }else{
-            LUT imp_l = mainImage.getProcessor().getLut();
-            LUT xz_l = donor.getProcessor().getLut();
+            LUT acceptorLut = acceptor.getProcessor().getLut();
+            LUT donorLut = donor.getProcessor().getLut();
+            acceptor.getProcessor().setLut(donorLut);
 
+
+            //チラツキ対策か？もしくは処理を軽くするため？
             //if(xz_l != old_lut){
              //   donor.getProcessor().setLut(imp_l);
                 //
@@ -711,30 +717,28 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
     }
 
-    private void syncLut(CompositeImage a, CompositeImage b){
-        LUT[] a_lut = a.getLuts();
-        LUT[] b_lut = b.getLuts();
+    private void syncLut(CompositeImage donor, CompositeImage acceptor){
+        LUT[] acceptorLuts = acceptor.getLuts();
+        LUT[] donorLuts = donor.getLuts();
 
         boolean check = true;
 
 
-        out:for(int i = 0; i < a_lut.length; i++){
-            if(a_lut[i] != b_lut[i]){
+        out:for(int i = 0; i < donorLuts.length; i++){
+            if(acceptorLuts[i] != donorLuts[i]){
                 check = false;
                 break out;
             }
         }
 
-        if(a.isComposite()) {
-
-            if (a.getMode() == IJ.GRAYSCALE) {
-                check = true;
-            }
-
-            if (check == false) {
-                b.setLuts(a_lut);
-            }
+        if (donor.getMode() == IJ.GRAYSCALE) {
+            check = true;
         }
+
+        if (check == false) {
+            acceptor.setLuts(donorLuts);
+        }
+
     }
 
 
@@ -942,7 +946,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
                 fitter.fitZpositoin();
                 meshTlist.get(mainImage.getT()).mainMap.forEach(yList ->{
                     yList.forEach(dArray ->{
-                        System.out.println("x, y, z = " + dArray[0] + ", " + dArray[1] + ", " + dArray[2]);
+                        //System.out.println("x, y, z = " + dArray[0] + ", " + dArray[1] + ", " + dArray[2]);
 
                     });
                 });
@@ -966,6 +970,8 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
             clickedPointX = ic.offScreenXD(e.getX());
             clickedPointY = ic.offScreenY(e.getY());
+
+
 
         }
 
@@ -1092,20 +1098,23 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
         if(e.getSource() == ic){
 
+
             if(viewMode == 0) {
-                int currentPX = ic.offScreenX(e.getX());
-                int currentPY = ic.offScreenY(e.getY());
+                if(mainImage.getRoi().getType() == Roi.COMPOSITE) {
+                    int currentPX = ic.offScreenX(e.getX());
+                    int currentPY = ic.offScreenY(e.getY());
 
-                double xposition = currentPX - clickedPointX;
-                double yposition = currentPY - clickedPointY;
+                    double xposition = currentPX - clickedPointX;
+                    double yposition = currentPY - clickedPointY;
 
-                MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
-                meshManager.translateXY(xposition, yposition);
+                    MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
+                    meshManager.translateXY(xposition, yposition);
 
-                clickedPointX = currentPX;
-                clickedPointY = currentPY;
+                    clickedPointX = currentPX;
+                    clickedPointY = currentPY;
 
-                this.createImage();
+                    this.createImage();
+                }
             }else if(viewMode == 1){
 
                 this.createImage();
@@ -1203,7 +1212,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
         meshTlist.get(mainImage.getT()).mainMap.forEach(yList ->{
             yList.forEach(dArray ->{
-                System.out.println("x, y, z = " + dArray[0] + ", " + dArray[1] + ", " + dArray[2]);
+                //System.out.println("x, y, z = " + dArray[0] + ", " + dArray[1] + ", " + dArray[2]);
 
             });
         });
@@ -1228,7 +1237,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         //*/
 
         int depth = (int)Math.round((mainImage.getNSlices() * az));
-        meshManager.translateDeep(Integer.valueOf(meshThickness.getText()), depth); //20200522 ここに問題がある
+        meshManager.translateDeep(Integer.valueOf(meshThickness.getText()), depth);
         interpolatedMap = meshManager.createInterporatedMap(forZCheckBox.isSelected());
         this.createCheckImage(interpolatedMap);
 
@@ -1261,7 +1270,16 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         result.show();
 
 
-        IJ.run("Interactive 3D Surface Plot");
+        /**
+         * for ImageJ, Interactive 3D surface Plot version-2.4.1
+         */
+        //IJ.run("Interactive 3D Surface Plot");
+
+        /**
+         * for Fiji , Interactive 3D surface Plot version-3.0
+         */
+        IJ.run("3D Surface Plot");
+
 
     }
 
@@ -1289,7 +1307,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
 
         mesh.mainMap.forEach(yList ->{
             yList.forEach(data ->{
-                System.out.println(data[0] + "¥t" + data[1] + "¥t" + data[2]);
+                //System.out.println(data[0] + "¥t" + data[1] + "¥t" + data[2]);
 
             });
         });
@@ -1308,7 +1326,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     public boolean showSaveDialog(String exp){
         boolean b = false;
 
-        System.out.println(imageFileDir);
+        //System.out.println(imageFileDir);
         FileChooser fChooser = new FileChooser();
 
         String[] splitFileName = imageFileName.split("\\.");
@@ -1391,7 +1409,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         }else{
             int count = 1;
             for(File f : loadFile.listFiles()){
-                System.out.println(f.getPath());
+                //System.out.println(f.getPath());
                 if(f.getName().matches(".*\\.tsv")) {
                     //MeshManager meshManager = new MeshManager(meshTlist.get(count));
                     //meshManager.loadMeshData(f.getParent(), f.getName());
