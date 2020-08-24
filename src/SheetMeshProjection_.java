@@ -102,6 +102,10 @@ import java.awt.event.WindowEvent;
  * 20200717
  *      根本的なZのみの歪み補正の機能がある方が良さそう。
  *
+ * 20200824
+ *      XY(もともとの機能)に加え XZ, YZに対して引き伸ばしの優先を行うメソッドの追加
+ *
+ *
  */
 
 /**
@@ -117,7 +121,7 @@ import java.awt.event.WindowEvent;
  */
 
 public class SheetMeshProjection_ extends PlugInFrame {
-    static String version = "1.0-20200717";
+    static String version = "1.0-20200824";
 
     ImagePlus mainImage;
     ImageCanvas ic;

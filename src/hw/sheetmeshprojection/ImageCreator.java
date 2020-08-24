@@ -7,11 +7,14 @@ import ij.ImageStack;
 import ij.gui.PolygonRoi;
 import ij.gui.Roi;
 import ij.measure.Calibration;
+import ij.plugin.CanvasResizer;
 import ij.plugin.HyperStackConverter;
+import ij.plugin.Straightener;
 import ij.plugin.filter.GaussianBlur;
 import ij.process.FloatPolygon;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +35,12 @@ public class ImageCreator {
     long creatingTime = 0;
 
     boolean numKeep = false;
+
+
+    public static final int XY = 0;
+    public static final int XZ = 1;
+    public static final int YZ = 2;
+
 
     public ImageCreator(ImagePlus stackIamge, MeshMap<Double[]> map){
         mainImage = stackIamge;
@@ -271,9 +280,17 @@ public class ImageCreator {
     }
 
 
-    public ImagePlus getFlattenedImage(int thickness){
+    public ImagePlus getFlattenedImage(int thickness, int priority){
         MeshManager meshManager = new MeshManager(meshMap);
-        return this.getFlattenedImage(meshManager.copy(), thickness);
+
+        if(priority == 1) {
+            return this.getFlattenedImageXZ(meshManager.copy(), thickness);
+        }else if(priority == 2){
+            return this.getFlattenedImageYZ(meshManager.copy(), thickness);
+        }else{
+            return this.getFlattenedImage(meshManager.copy(), thickness);
+        }
+
     }
 
     public ImagePlus getFlattenedImage(MeshMap<Double[]> mesh, int thickness){
@@ -349,6 +366,226 @@ public class ImageCreator {
             return result;
         }
     }
+
+
+    public ImagePlus getFlattenedImageXZ(MeshMap<Double[]> mesh, int thickness){
+        MeshManager meshManager = new MeshManager(mesh);
+        numKeep = true;
+
+        ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, ArrayList<Double>>> hashMap = new ConcurrentHashMap<>();//<z,<c, values>>
+        ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, ImageProcessor>> ipHashMap = new ConcurrentHashMap<>();//<y, <c, ip>>
+
+
+        for(int y = 0; y < mesh.getYsize(); y++){
+            ConcurrentHashMap<Integer, ImageProcessor> ipBuff = new ConcurrentHashMap<>();
+            ipHashMap.put(y, ipBuff);
+
+        }
+
+
+
+        for(int i = 0; i < thickness; i++){
+            ConcurrentHashMap<Integer, ArrayList<Double>> buff = new ConcurrentHashMap<>();
+            hashMap.put(i, buff);
+
+            for(int c = 0; c < mainImage.getNChannels(); c++){
+                ArrayList<Double> buffa = new ArrayList<>();
+                hashMap.get(i).put(c, buffa);
+            }
+
+        }
+
+        //まず、各lineでXZ画像を作り、LineRoiからStraighten画像ををつくる。 -> 画像のサイズがそれぞれで異なるため
+        //ついでに最大幅も取る
+
+        int maxWidth = 0;
+        for(int y = 0; y < mesh.getYsize(); y++){
+            IJ.showProgress(y, mesh.getYsize());
+            ImagePlus xzImage = this.getXZimage(y); //ここチェック！
+
+            PolygonRoi proi = new PolygonRoi(meshManager.getXZpolygonKeepXpoints(y), PolygonRoi.FREELINE); //ここも
+
+            for(int c = 0; c < mainImage.getNChannels(); c++) {
+                ImagePlus singleChannel = new ImagePlus();
+                singleChannel.setProcessor(xzImage.getStack().getProcessor(c+1));
+                singleChannel.setRoi(proi);
+                //ImageProcessor ip = this.straightenLine(singleChannel, thickness); //なぜ全部同じ長さになるのか？上記KeepXpointsのせいか？
+                Straightener straightener = new Straightener();
+                ImageProcessor ip = straightener.straightenLine(singleChannel, thickness);
+
+                if(maxWidth < ip.getWidth()){
+                    maxWidth = ip.getWidth();
+                }
+                ipHashMap.get(y).put(c, ip);
+            }
+        }
+
+
+        //size 合わせ
+        ImageStack testStack = new ImageStack(maxWidth, thickness);
+        final int max = maxWidth;
+        ipHashMap.forEach((k, v) ->{
+            for(int c = 0; c < mainImage.getNChannels(); c++) {
+                ImageProcessor buffIp = ipHashMap.get(k).get(c);
+                double offset = (max - buffIp.getWidth()) / 2.0;
+                CanvasResizer canvasResizer = new CanvasResizer();
+                ImageProcessor resizedIp = canvasResizer.expandImage(buffIp, max, buffIp.getHeight(), 0, 0);
+                resizedIp.setInterpolate(true);
+                resizedIp.setInterpolationMethod(ImageProcessor.BICUBIC);
+                resizedIp.translate(offset, 0);
+                ipHashMap.get(k).replace(c, resizedIp);
+                testStack.addSlice(resizedIp);
+
+                //ここで上のようにhashMapにデータを入れ直せばうごくはず
+                for (int i = 0; i < resizedIp.getHeight(); i++) {
+                    double[] ddata = resizedIp.getLine(0, i, resizedIp.getWidth() - 1, i);
+                    for (int n = 0; n < ddata.length; n++) {
+                        hashMap.get(i).get(c).add(ddata[n]);
+                    }
+                }
+            }
+        });
+
+        int height = mesh.getYsize();
+        int width = hashMap.get(0).get(0).size() / height;
+
+        ImageStack imageStack = new ImageStack(width, height);
+
+        for(int i = 0; i < hashMap.size(); i++){
+            for(int c = 0; c < mainImage.getNChannels(); c++) {
+                double[] ddat = hashMap.get(i).get(c).stream().mapToDouble(d -> d).toArray();
+                //System.out.println("ddat size"  + ddat.length);
+                ImageProcessor ip = new FloatProcessor(width, height, ddat);
+                imageStack.addSlice(ip);
+            }
+        }
+
+
+        ImagePlus result = new ImagePlus();
+        result.setStack("FlattenedIamgeXZ", imageStack);
+        result.setDimensions(mainImage.getNChannels(), thickness, 1);
+
+        if(mainImage.getNChannels() > 1){
+            return HyperStackConverter.toHyperStack(result, mainImage.getNChannels(), thickness, 1);
+        }else{
+            return result;
+        }
+
+    }
+
+
+    public ImagePlus getFlattenedImageYZ(MeshMap<Double[]> mesh, int thickness){
+        MeshManager meshManager = new MeshManager(mesh);
+        numKeep = true;
+
+        ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, ArrayList<Double>>> hashMap = new ConcurrentHashMap<>();//<z,<c, values>>
+        ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, ImageProcessor>> ipHashMap = new ConcurrentHashMap<>();//<x, <c, ip>>
+
+
+        for(int x = 0; x < mesh.getXsize(); x++){
+            ConcurrentHashMap<Integer, ImageProcessor> ipBuff = new ConcurrentHashMap<>();
+            ipHashMap.put(x, ipBuff);
+
+        }
+
+
+
+        for(int i = 0; i < thickness; i++){
+            ConcurrentHashMap<Integer, ArrayList<Double>> buff = new ConcurrentHashMap<>();
+            hashMap.put(i, buff);
+
+            for(int c = 0; c < mainImage.getNChannels(); c++){
+                ArrayList<Double> buffa = new ArrayList<>();
+                hashMap.get(i).put(c, buffa);
+            }
+
+        }
+
+        //まず、各lineでXZ画像を作り、LineRoiからStraighten画像ををつくる。 -> 画像のサイズがそれぞれで異なるため
+        //ついでに最大幅も取る
+
+        int maxWidth = 0;
+        for(int x = 0; x < mesh.getXsize(); x++){
+            IJ.showProgress(x, mesh.getXsize());
+            ImagePlus yzImage = this.getYZimage(x); //ここチェック！
+
+            PolygonRoi proi = new PolygonRoi(meshManager.getYZpolygonKeepYpoints(x), PolygonRoi.FREELINE); //ここも
+
+            for(int c = 0; c < mainImage.getNChannels(); c++) {
+                ImagePlus singleChannel = new ImagePlus();
+                singleChannel.setProcessor(yzImage.getStack().getProcessor(c+1));
+                singleChannel.setRoi(proi);
+
+
+                //ImageProcessor ip = this.straightenLine(singleChannel, thickness); //なぜ全部同じ長さになるのか？上記KeepXpointsのせいか？
+                Straightener straightener = new Straightener();
+                ImageProcessor ip = straightener.straightenLine(singleChannel, thickness);
+
+                if(maxWidth < ip.getWidth()){
+                    maxWidth = ip.getWidth();
+                }
+                ipHashMap.get(x).put(c, ip);
+            }
+        }
+
+
+        //size 合わせ
+        ImageStack testStack = new ImageStack(maxWidth, thickness);
+        final int max = maxWidth;
+        ipHashMap.forEach((k, v) ->{
+            for(int c = 0; c < mainImage.getNChannels(); c++) {
+                ImageProcessor buffIp = ipHashMap.get(k).get(c);
+                double offset = (max - buffIp.getWidth()) / 2.0;
+                CanvasResizer canvasResizer = new CanvasResizer();
+                ImageProcessor resizedIp = canvasResizer.expandImage(buffIp, max, buffIp.getHeight(),0, 0);
+                resizedIp.setInterpolate(true);
+                resizedIp.setInterpolationMethod(ImageProcessor.BICUBIC);
+                resizedIp.translate(offset, 0.0);
+                ipHashMap.get(k).replace(c, resizedIp);
+                testStack.addSlice(resizedIp);
+
+                //ここで上のようにhashMapにデータを入れ直せばうごくはず
+                for (int i = 0; i < resizedIp.getHeight(); i++) {
+                    double[] ddata = resizedIp.getLine(0, i, resizedIp.getWidth() - 1, i);
+                    for (int n = 0; n < ddata.length; n++) {
+                        hashMap.get(i).get(c).add(ddata[n]);
+                    }
+                }
+            }
+        });
+
+
+
+        int width = mesh.getXsize();
+        int height = hashMap.get(0).get(0).size() / width;
+
+        ImageStack imageStack = new ImageStack(width, height);
+
+        for(int i = hashMap.size()-1; i > -1 ; i--){
+            for(int c = 0; c < mainImage.getNChannels(); c++) {
+                double[] ddat = hashMap.get(i).get(c).stream().mapToDouble(d -> d).toArray();
+                //System.out.println("ddat size"  + ddat.length);
+                ImageProcessor ip = new FloatProcessor(height, width, ddat);
+                ImageProcessor rotated = ip.rotateRight();
+                rotated.flipHorizontal();
+                imageStack.addSlice(rotated);
+            }
+        }
+
+
+        ImagePlus result = new ImagePlus();
+        result.setStack("FlattenedIamgeYZ", imageStack);
+
+        result.setDimensions(mainImage.getNChannels(), thickness, 1);
+
+        if(mainImage.getNChannels() > 1){
+            return HyperStackConverter.toHyperStack(result, mainImage.getNChannels(), thickness, 1);
+        }else{
+            return result;
+        }
+    }
+
+
 
 
     // from Straightener, これ用に改造

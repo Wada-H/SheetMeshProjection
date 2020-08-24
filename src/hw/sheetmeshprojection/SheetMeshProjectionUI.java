@@ -1,6 +1,9 @@
 package hw.sheetmeshprojection;
 
-import ij.*;
+import ij.CompositeImage;
+import ij.IJ;
+import ij.ImageListener;
+import ij.ImagePlus;
 import ij.gui.*;
 import ij.plugin.Duplicator;
 import ij.process.FloatProcessor;
@@ -16,15 +19,14 @@ import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.Pane;
-import javafx.scene.shape.Mesh;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.GeneralPath;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
@@ -108,6 +110,11 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     @FXML public TextField autofitThreshold;
 
     @FXML public CheckBox forZCheckBox;
+
+    @FXML public RadioButton priorityXY;
+    @FXML public RadioButton priorityXZ;
+    @FXML public RadioButton priorityYZ;
+
 
     public SheetMeshProjectionUI(ImagePlus ip){
 
@@ -1288,7 +1295,15 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     public void createFlatImage(){
 
         ImageCreator imageCreator = new ImageCreator(mainImage, interpolatedMap);
-        ImagePlus flatImage = imageCreator.getFlattenedImage(Integer.valueOf(meshThickness.getText()));
+        ImagePlus flatImage = new ImagePlus();
+
+        if(priorityXZ.isSelected()){
+            flatImage = imageCreator.getFlattenedImage(Integer.valueOf(meshThickness.getText()), ImageCreator.XZ);
+        }else if(priorityYZ.isSelected()){
+            flatImage = imageCreator.getFlattenedImage(Integer.valueOf(meshThickness.getText()), ImageCreator.YZ);
+        }else{
+            flatImage = imageCreator.getFlattenedImage(Integer.valueOf(meshThickness.getText()), ImageCreator.XY);
+        }
 
 
         /* 計算テスト

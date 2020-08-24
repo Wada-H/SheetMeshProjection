@@ -326,6 +326,17 @@ public class MeshManager {
         return buffPR;
     }
 
+    public FloatPolygon getYZpolygonKeepYpoints(int colNum){ //for ImageCreate > getFlattenedImageYZ
+        float[] ypoints = new float[mainMeshMap.getYsize()];
+        float[] zpoints = new float[mainMeshMap.getYsize()];
+        for(int y = 0; y < mainMeshMap.getYsize(); y++){
+            ypoints[y] = mainMeshMap.getValue(colNum, y)[2].floatValue();
+            zpoints[y] = y;
+        }
+
+        FloatPolygon buffPR = new FloatPolygon(ypoints, zpoints);
+        return buffPR;
+    }
 
 
     /* translateに不具合か?
