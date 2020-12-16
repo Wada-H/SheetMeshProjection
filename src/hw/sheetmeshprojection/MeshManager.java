@@ -19,6 +19,12 @@ import java.util.stream.Stream;
  * @author WADA Housei
  */
 
+/*
+// 20201124 createInterpolatedMapForCol の改善中
+// 20201125 どうもtraslationDeepでうまくメモリ上に保存されていない？のが原因のようだ by この処理を外すと問題はなくなるため。ただし、changeMeshSizeなどを使って(ボタンを押して)作り直した場合にうまくいくケースもある(これを直前に入れてもエラーはでる。)
+*/
+
+
 public class MeshManager {
 
     MeshMap<Double[]> mainMeshMap;
@@ -56,6 +62,7 @@ public class MeshManager {
 
         IntStream yStream = IntStream.range(0, mainMeshMap.getYsize());
         yStream.parallel().forEach(y ->{
+        //for(int y = 0; y < mainMeshMap.getYsize(); y++) {
             FloatPolygon buff = this.getRowByFloatPolygon(y);
             PolyLineManager polyLineManager = new PolyLineManager(buff);
 
@@ -66,7 +73,7 @@ public class MeshManager {
             ConcurrentHashMap<Integer, Double[]> buffXmap = new ConcurrentHashMap<>();
 
 
-            for(int x = 0; x < mainMeshMap.getXsize() - 1; x++){
+            for (int x = 0; x < mainMeshMap.getXsize() - 1; x++) {
                 FloatPolygon segmentedLine = polyLineManager.getSegmentAsFloatPolygon(x);
                 FloatPolygon xzSegmentedLine = xzPolylineManager.getSegmentAsFloatPolygon(x, segmentedLine.npoints);
 
@@ -74,7 +81,7 @@ public class MeshManager {
                 // ここから Spline3Dを使用する方法で考える
                 ArrayList<Double[]> segment3DList = new ArrayList<>();
 
-                for(int i = 0; i < segmentedLine.npoints; i++){
+                for (int i = 0; i < segmentedLine.npoints; i++) {
                     Double xValue = Double.valueOf(String.valueOf(segmentedLine.xpoints[i])); //float -> double 誤差対策
                     Double yValue = Double.valueOf(String.valueOf(segmentedLine.ypoints[i]));
                     Double zValue = Double.valueOf(String.valueOf(xzSegmentedLine.ypoints[i]));
@@ -83,25 +90,26 @@ public class MeshManager {
                 }
 
 
-
                 Spline3D spline3D = new Spline3D(segment3DList);
-                ArrayList<Double[]> newLineArray = spline3D.getThinedSplineCoordinateXZ(1/10.0, rowMaxList.get(x), true, forZ);
+                ArrayList<Double[]> newLineArray = spline3D.getThinedSplineCoordinateXZ(1 / 10.0, rowMaxList.get(x), true, forZ);
 
 
-                int limitPosition = rowMaxList.get(x) -1;
-                if(x == mainMeshMap.getXsize() - 2){
+                int limitPosition = rowMaxList.get(x) - 1;
+                if (x == mainMeshMap.getXsize() - 2) {
                     limitPosition++;
                 }
 
 
-                for(int i = 0; i < limitPosition; i++){
+                for (int i = 0; i < limitPosition; i++) {
 
                     buffXmap.put(xIndex, newLineArray.get(i));
                     xIndex++;
                 }
             }
             result.setRow(y, buffXmap);
+        //}
         });
+
         return result;
     }
 
@@ -117,7 +125,12 @@ public class MeshManager {
         result.createMesh(mainMeshMap.getXsize(), colLength, defaultValue);
 
         IntStream xStream = IntStream.range(0, mainMeshMap.getXsize());
-        xStream.parallel().forEach(x ->{
+
+
+        // 以下 テストコード // これでも起こる
+        ///*
+        for(int x = 0; x < mainMeshMap.getXsize(); x++){
+
             FloatPolygon buff = this.getColumnByFloatPolygon(x);
             PolyLineManager polyLineManager = new PolyLineManager(buff);
 
@@ -131,11 +144,10 @@ public class MeshManager {
                 FloatPolygon segmentedLine = polyLineManager.getSegmentAsFloatPolygon(y);
                 FloatPolygon yzSegmentedLine = yzPolyLineManager.getSegmentAsFloatPolygon(y, segmentedLine.npoints);
 
-
                 // ここから Spline3Dを使用する方法で考える
                 ArrayList<Double[]> segment3DList = new ArrayList<>();
 
-                for(int i = 0; i < segmentedLine.npoints; i++){
+                for (int i = 0; i < segmentedLine.npoints; i++) {
                     Double xValue = Double.valueOf(String.valueOf(segmentedLine.xpoints[i])); //float -> double 誤差対策
                     Double yValue = Double.valueOf(String.valueOf(segmentedLine.ypoints[i]));
                     Double zValue = Double.valueOf(String.valueOf(yzSegmentedLine.ypoints[i]));
@@ -145,23 +157,74 @@ public class MeshManager {
                 }
 
                 Spline3D spline3D = new Spline3D(segment3DList);
-                ArrayList<Double[]> newLineArray = spline3D.getThinedSplineCoordinateYZ(1/10.0, colMaxList.get(y), true, forZ);
+                ArrayList<Double[]> newLineArray = spline3D.getThinedSplineCoordinateYZ(1 / 10.0, colMaxList.get(y), true, forZ);
 
 
-                int limitPosition = colMaxList.get(y) -1; //ここをcalMaxList.get(y)にすればとりあえず回避できそう
+                int limitPosition = colMaxList.get(y) - 1; //ここをcalMaxList.get(y)にすればとりあえず回避できそう
 
-                if(y == mainMeshMap.getYsize() - 2){
+                if (y == mainMeshMap.getYsize() - 2) {
                     limitPosition++;
                 }
 
-                for(int i = 0; i < limitPosition; i++){
+                for (int i = 0; i < limitPosition; i++) {
                     buffYmap.put(yIndex, newLineArray.get(i));
                     yIndex++;
                 }
             }
             result.setColumn(x, buffYmap);
 
+        }
+        //*/
+        //　ここまで　//
+
+        /*
+        xStream.parallel().forEach(x ->{ //もともとparallelで
+            FloatPolygon buff = this.getColumnByFloatPolygon(x);
+            PolyLineManager polyLineManager = new PolyLineManager(buff);
+
+            FloatPolygon yzBuff = this.getYZpolygon(x);
+            PolyLineManager yzPolyLineManager = new PolyLineManager(yzBuff);
+
+            int yIndex = 0;
+            ConcurrentHashMap<Integer, Double[]> buffYmap = new ConcurrentHashMap<>();
+
+            for (int y = 0; y < mainMeshMap.getYsize() - 1; y++) {
+
+
+                FloatPolygon segmentedLine = polyLineManager.getSegmentAsFloatPolygon(y);
+                FloatPolygon yzSegmentedLine = yzPolyLineManager.getSegmentAsFloatPolygon(y, segmentedLine.npoints);
+
+                // ここから Spline3Dを使用する方法で考える
+                ArrayList<Double[]> segment3DList = new ArrayList<>();
+
+                for (int i = 0; i < segmentedLine.npoints; i++) {
+                    Double xValue = Double.valueOf(String.valueOf(segmentedLine.xpoints[i])); //float -> double 誤差対策
+                    Double yValue = Double.valueOf(String.valueOf(segmentedLine.ypoints[i]));
+                    Double zValue = Double.valueOf(String.valueOf(yzSegmentedLine.ypoints[i]));
+
+                    Double[] coordinate = {xValue, yValue, zValue};
+                    segment3DList.add(coordinate);
+                }
+
+                Spline3D spline3D = new Spline3D(segment3DList);
+                ArrayList<Double[]> newLineArray = spline3D.getThinedSplineCoordinateYZ(1 / 10.0, colMaxList.get(y), true, forZ);
+
+
+                int limitPosition = colMaxList.get(y) - 1; //ここをcalMaxList.get(y)にすればとりあえず回避できそう
+
+                if (y == mainMeshMap.getYsize() - 2) {
+                    limitPosition++;
+                }
+
+                for (int i = 0; i < limitPosition; i++) {
+                    buffYmap.put(yIndex, newLineArray.get(i));
+                    yIndex++;
+                }
+            }
+            result.setColumn(x, buffYmap);
         });
+        */
+
         return result;
     }
 
@@ -383,6 +446,50 @@ public class MeshManager {
         }
     }
 
+    public MeshMap<Double[]> translateDeep2(int thickness, int limitPosition){
+        int row = mainMeshMap.getYsize();
+        int col = mainMeshMap.getXsize();
+        Double[] defaultValue = {0.0, 0.0, 0.0};
+
+        MeshMap<Double[]> newMeshMap = new MeshMap<>();
+        newMeshMap.createMesh(col, row, defaultValue);
+
+
+        IntStream intStreamRow = IntStream.range(0, row);
+        intStreamRow.parallel().forEach(i ->{
+        //for(int i = 0; i < row; i++) {
+            FloatPolygon fpxy = this.getRowByFloatPolygon(i);
+            FloatPolygon fp = this.getRowByFloatPolygonXZ(i);
+            PolyLineManager polyLineManager = new PolyLineManager(fp);
+            FloatPolygon shiftedFp = polyLineManager.getShiftedPolygon(thickness);
+            //FloatPolygon shiftedFp = fp; //getShfitedPolygon check
+            //ここでx, yをそれぞれ行って、座標を変更すればそれなりの値か？ 20200515
+
+            ArrayList<Double[]> list = new ArrayList<>();
+            for (int n = 0; n < shiftedFp.npoints; n++) {
+                double x = Double.parseDouble(String.valueOf(fp.xpoints[n]));
+                double y = Double.parseDouble(String.valueOf(fpxy.ypoints[n]));
+                double z = Double.parseDouble(String.valueOf(shiftedFp.ypoints[n]));
+
+                //手動を考えると画像からはみ出るのを阻止したいが、厚みを考えるとはみ出さないと、、、どうする？ 2020.1.6
+                /*
+                if(z > limitPosition){
+                    z = limitPosition;
+                }
+                */
+                Double[] buffD = {x, y, z};
+
+                list.add(buffD);
+            }
+            newMeshMap.setRow(i, list);
+        //}
+
+        });
+
+        return newMeshMap;
+    }
+
+
 
 
     public void translateXYZ(double x, double y, double z){
@@ -562,6 +669,59 @@ public class MeshManager {
 
 
     }
+
+    // TEST for THE error 20201201 //
+    public MeshMap<Double[]> reconstruct(){
+        int row = mainMeshMap.getYsize();
+        int col = mainMeshMap.getXsize();
+        Double[] defaultValue = {0.0, 0.0, 0.0};
+
+        MeshMap<Double[]> newMap = new MeshMap<>();
+        newMap.createMesh(col, row, defaultValue);
+
+
+        for(int y = 0; y < row; y++){
+
+            List<Double[]> reconstructedArray = mainMeshMap.getRowAsList(y);
+            System.out.println(reconstructedArray.size());//3であれ
+            newMap.setRow(y, reconstructedArray);
+        }
+
+
+
+        /*
+        MeshMap<Double[]> newMapCol = new MeshMap<>();
+        newMapCol.createMesh(col, row, defaultValue);
+
+        IntStream intStreamRow = IntStream.range(0, row); //Xのサイズ変更　何故か一つ飛ばしている
+        intStreamRow.forEach(y ->{
+            Spline3D spline3D = new Spline3D((ArrayList)mainMeshMap.getRowAsList(y));
+            ArrayList<Double[]> reconstructedArray = spline3D.getArrayList();
+            System.out.println("MeshManager.reconstruct : reconstructedArray :"+ y + "! "  + reconstructedArray.get(y)[0] + ", " + reconstructedArray.get(y)[1] + ", " + reconstructedArray.get(y)[2]);
+            newMapCol.setRow(y, reconstructedArray);
+
+        });
+
+
+
+        MeshMap<Double[]> newMapRow = new MeshMap<>();
+        newMapRow.createMesh(col, row, defaultValue);
+
+
+        IntStream intStreamCol = IntStream.range(0, col); //Yのサイズ変更　問題ない
+        intStreamCol.parallel().forEach(x ->{
+            Spline3D spline3D = new Spline3D((ArrayList)newMapCol.getColumnAsList(x));
+            ArrayList<Double[]> reconstructedArray = spline3D.getArrayList();
+
+            newMapRow.setColumn(x, reconstructedArray);
+
+        });
+
+        return newMapRow;
+        */
+        return newMap;
+    }
+
 
 
     static boolean saveMeshData(MeshMap<Double[]> meshmap, String filePath, String fileName){ //Tab区切り、x, y, z のデータを1frame分

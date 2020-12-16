@@ -8,7 +8,7 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="CrossSectionViewer_" />
-    <orderEntry type="module" module-name="imagej1" />
     <orderEntry type="library" name="Interactive_3D_Surface_Plot" level="project" />
+    <orderEntry type="module" module-name="IJ_153f" />
   </component>
 </module>

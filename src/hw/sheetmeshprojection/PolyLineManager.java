@@ -42,7 +42,7 @@ public class PolyLineManager {
             forSpline.fitSpline();
         }
 
-
+        //System.out.println("PolyLineManage.getSegmentAsFloatPolygon : " + mainPolygon.npoints);
         FloatPolygon interpolatedPolygon = forSpline.getInterpolatedPolygon(1.0, false);//getFloatPolygonでは適当な位置に点が取られるため、1pixel毎欲しい場合はこっち。
 
 
@@ -159,16 +159,26 @@ public class PolyLineManager {
             double x4 = fpArray.get(i).xpoints[2];
             double y4 = fpArray.get(i).ypoints[2];
 
+
             Point2D crossPoint = this.calc4(x1, y1, x2, y2, x3, y3, x4, y4); //before 1.52t
             //Point2D crossPoint = this.calc4(x4, y4, x1, y1, x2, y2, x3, y3); //1.52u40 later *この対応では厳しいかも -> 1.53b33でLine.getFloatPolygonに修正（1.52tと同じなに変更)
 
             //System.out.println("shifted xz : " + crossPoint.getX() + ", " + crossPoint.getY());
-            if(Double.isNaN(crossPoint.getX())){
-                shiftedXpoints[i] = shiftedXpoints[i-1];
-                shiftedYpoints[i] = shiftedYpoints[i-1];
+            if(Double.isNaN(crossPoint.getX())) {
+                shiftedXpoints[i] = shiftedXpoints[i - 1];
+                shiftedYpoints[i] = shiftedYpoints[i - 1];
+            }else if(Double.isInfinite(crossPoint.getX())){
+                shiftedXpoints[i] = (float) x2;
+                shiftedYpoints[i] = (float) y2;
+
             }else {
-                shiftedXpoints[i] = (float) crossPoint.getX();
-                shiftedYpoints[i] = (float) crossPoint.getY();
+                if(this.chechParallel(x1, y1, x2, y2, x3, y3, x4, y4) == true){
+                    shiftedXpoints[i] = (float) x2;
+                    shiftedYpoints[i] = (float) y2;
+                }else {
+                    shiftedXpoints[i] = (float) crossPoint.getX();
+                    shiftedYpoints[i] = (float) crossPoint.getY();
+                }
             }
 
         }
@@ -176,8 +186,22 @@ public class PolyLineManager {
         shiftedXpoints[mainPolygon.npoints -1] = fpArray.get(fpArray.size() -1).xpoints[2];
         shiftedYpoints[mainPolygon.npoints -1] = fpArray.get(fpArray.size() -1).ypoints[2];
 
+        // x座標費合わせたz座標を取得 //
+        PolygonRoi shiftedPoints = new PolygonRoi(shiftedXpoints, shiftedYpoints, PolygonRoi.POLYLINE);
+        shiftedPoints.fitSpline();
+        FloatPolygon interplatedPolygon = shiftedPoints.getInterpolatedPolygon(1.0, false);
+        float[] resultX = new float[mainPolygon.npoints];
+        float[] resultY = new float[mainPolygon.npoints];
 
-        FloatPolygon result = new FloatPolygon(shiftedXpoints, shiftedYpoints);
+        for(int i = 0; i < mainPolygon.npoints; i++){
+            resultX[i] = xpoints[i];
+            resultY[i] = Spline3D.searchZpositon(interplatedPolygon, xpoints[i]);
+
+        }
+
+        FloatPolygon result = new FloatPolygon(resultX, resultY);
+
+
         return result;
     }
 
@@ -233,8 +257,22 @@ public class PolyLineManager {
         double y = y1 + ((y2 - y1) * (s1 / (s1 + s2)));
 
         Point2D.Double result = new Point2D.Double(x, y);
+
         return result;
     }
 
+    public boolean chechParallel(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4){
+        boolean result = false;
+
+        double accuracy = 1000.0;
+        double a1 = (y2 - y1) / (x2 - x1);
+        double a2 = (y4 - y3) / (x4 - x3);
+        double d = Math.abs((a1 - a2) * accuracy);
+        if(d < 1){
+            result = true;
+        }
+
+        return result;
+    }
 
 }

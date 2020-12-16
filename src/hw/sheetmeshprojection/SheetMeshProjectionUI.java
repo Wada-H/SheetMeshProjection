@@ -76,6 +76,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     int viewMode = 0; //viewModeListより
 
     ConcurrentHashMap<Integer, MeshMap<Double[]>> meshTlist = new ConcurrentHashMap<>();
+    ConcurrentHashMap<Integer, MeshMap<Double[]>> shiftedMeshTlist = new ConcurrentHashMap<>(); //20201208エラー対策
 
 
     //完全な補完座標を保持したMeshMap// -> この座標値のpixel値を用いて矩形画像を作ることでx,yの引き伸ばし画像が作れる。(zの扱いはどうするか？)
@@ -84,7 +85,6 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     MeshMap<Double[]> getInterpolatedMapForRow;
 
     MeshMap<Double[]> interpolatedMap;
-
 
     //ドラッグ管理用
     double clickedPointX = 0.0;
@@ -261,8 +261,6 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     public void showMeshAllShape(MeshMap<Double[]> mesh){
         currentOverlay.clear();
 
-
-
         ShapeRoi roi = this.getMeshAllShape(mesh);
 
         currentOverlay.add(roi);
@@ -270,8 +268,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         currentOverlay.drawLabels(true);
         mainImage.setOverlay(null);
         mainImage.setOverlay(currentOverlay);
-
-
+        mainImage.setRoi(roi);
     }
 
     public ShapeRoi getMeshAllShape(MeshMap<Double[]> mesh){
@@ -1188,6 +1185,7 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         mainImage.killRoi();
         this.createMesh(Integer.valueOf(meshSizeWidth.getText()), Integer.valueOf(meshSizeHeight.getText()), Integer.valueOf(meshStepSize.getText()));
         this.addValueXY(meshTlist.get(mainImage.getT()), 0, 0);
+
         this.showMeshAllShape(meshTlist.get(mainImage.getT()));
 
         this.createCrossSectionImage();
@@ -1203,10 +1201,10 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         fitter.setThreshold(Double.valueOf(autofitThreshold.getText()));
         fitter.fitZpositoin();
 
-        MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
-
 
         /* //flat imageを作る際のほうがいいかも 2020220
+        MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
+
         double xScale = mainImage.getCalibration().pixelWidth;
         double zScale = mainImage.getCalibration().pixelDepth;
         double az = zScale / xScale;
@@ -1217,12 +1215,14 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         meshManager.translateDeep(Integer.valueOf(meshThickness.getText()), depth);
         */
 
+        /*
         meshTlist.get(mainImage.getT()).mainMap.forEach(yList ->{
             yList.forEach(dArray ->{
-                //System.out.println("x, y, z = " + dArray[0] + ", " + dArray[1] + ", " + dArray[2]);
+                System.out.println("x, y, z = " + dArray[0] + ", " + dArray[1] + ", " + dArray[2]);
 
             });
         });
+        */
 
         this.showMessageFX("AutoFit", "Done!");
     }
@@ -1232,20 +1232,50 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
     @FXML
     public void checkMesh(){
 
+        //this.changeMeshSize();//これをいれることで1のセットで一応動くことが確認できた。->もとのコードでも可
+
+        //MeshManager reconstruction = new MeshManager(meshTlist.get(mainImage.getT()).copy());
+        //meshTlist.replace(mainImage.getT(), reconstruction.reconstruct());
+        //meshTlist.get(mainImage.getT()).setMainMap(reconstruction.reconstruct());
+        //meshTlist.get(mainImage.getT()).setMainMap(reconstruction.mainMeshMap);
+
+
         MeshManager meshManager = new MeshManager(meshTlist.get(mainImage.getT()));
 
-        //*// Autofitから移動 20200220
+        ///*// Autofitから移動 20200220
         double xScale = mainImage.getCalibration().pixelWidth;
         double zScale = mainImage.getCalibration().pixelDepth;
         double az = zScale / xScale;
         if(az == 0){
             az = 1;
         }
-        //*/
 
         int depth = (int)Math.round((mainImage.getNSlices() * az));
-        meshManager.translateDeep(Integer.valueOf(meshThickness.getText()), depth);
-        interpolatedMap = meshManager.createInterporatedMap(forZCheckBox.isSelected());
+        //meshManager.translateDeep(Integer.valueOf(meshThickness.getText()), depth);
+        //meshManager.setMeshMap(meshManager.translateDeep2(Integer.valueOf(meshThickness.getText()), depth));
+        //meshManager.mainMeshMap.setMainMap(meshManager.translateDeep2(Integer.valueOf(meshThickness.getText()), depth));
+
+        //meshTlist.get(mainImage.getT()).setMainMap(meshManager.translateDeep2(Integer.valueOf(meshThickness.getText()), depth));
+        //今の所これが一番いい。とりあえず動く。が、Zpositionが表示されてない部分が出る。ただし、2回目に以前と同じエラーがでる。これはなにかヒントかも
+
+        //*/1
+        //MeshManager forInterpolate = new MeshManager(meshManager.translateDeep2(Integer.valueOf(meshThickness.getText()), depth));
+        //meshTlist.replace(mainImage.getT(), forInterpolate.mainMeshMap);
+        //interpolatedMap = forInterpolate.createInterporatedMap(forZCheckBox.isSelected());
+        //System.out.println("UI.checkMesh_meshManager.SIZE : " + forInterpolate.mainMeshMap.getXsize() + ", " + forInterpolate.mainMeshMap.getYsize());
+
+        //this.createInterporatedMap(forInterpolate.mainMeshMap);
+
+        //meshManager.setMeshMap(forInterpolate.mainMeshMap);
+        //System.out.println("UI.checkMesh_meshManager.SIZE : " + meshManager.mainMeshMap.getXsize() + ", " + meshManager.mainMeshMap.getYsize());
+        //interpolatedMap = meshManager.createInterporatedMap(forZCheckBox.isSelected());
+
+        //20201208
+        shiftedMeshTlist.put(mainImage.getT(), meshManager.translateDeep2(Integer.valueOf(meshThickness.getText()), depth));
+        MeshManager forInterpolate = new MeshManager(shiftedMeshTlist.get(mainImage.getT()));
+        interpolatedMap = forInterpolate.createInterporatedMap(forZCheckBox.isSelected());
+
+
         this.createCheckImage(interpolatedMap);
 
     }
@@ -1277,15 +1307,16 @@ public class SheetMeshProjectionUI extends AnchorPane implements ItemListener, I
         result.show();
 
 
+
         /**
          * for ImageJ, Interactive 3D surface Plot version-2.4.1
          */
-        //IJ.run("Interactive 3D Surface Plot");
+         //IJ.run("Interactive 3D Surface Plot");
 
         /**
          * for Fiji , Interactive 3D surface Plot version-3.0
          */
-        IJ.run("3D Surface Plot");
+         IJ.run("3D Surface Plot");
 
 
     }

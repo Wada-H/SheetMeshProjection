@@ -512,5 +512,23 @@ public class Spline3D {
     }
 
 
+    static public float searchZpositon(FloatPolygon xzORyz, float value){
+        float checkNum = Float.MAX_VALUE;
+        float result = 0;
+
+        float[] xArray = xzORyz.xpoints;
+        float[] zArray = xzORyz.ypoints;
+
+        for(int x = 0; x < xArray.length; x++){
+            float buffValue = Math.abs(xArray[x] - value);
+            if(buffValue < checkNum){
+                result = zArray[x];
+                checkNum = buffValue;
+            }
+        }
+
+        return result;
+
+    }
 
 }

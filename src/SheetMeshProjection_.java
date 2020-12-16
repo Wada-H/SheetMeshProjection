@@ -105,7 +105,11 @@ import java.awt.event.WindowEvent;
  * 20200824
  *      XY(もともとの機能)に加え XZ, YZに対して引き伸ばしの優先を行うメソッドの追加
  *
- *
+ * 20201215
+ *      create new meshやload roiを行ってすぐにcheckMeshを押すとエラーがでる。(Array size　関連, 11/20にgithub上で報告があった)
+ *      PolyLineManager.getShiftedPolygon において交点の計算時にinfinityが出る場合があり、これによるarray size エラーということであった。
+ *      このinfinityを回避する処理を入れることで解決。
+ *      また、shift後のメッシュを別で保存し、表示するのはshift前のROIとなるように変更。
  */
 
 /**
@@ -121,7 +125,7 @@ import java.awt.event.WindowEvent;
  */
 
 public class SheetMeshProjection_ extends PlugInFrame {
-    static String version = "1.0-20200824";
+    static String version = "1.0-20201215";
 
     ImagePlus mainImage;
     ImageCanvas ic;
